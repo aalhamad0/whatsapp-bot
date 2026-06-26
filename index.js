@@ -4,15 +4,21 @@ const express = require('express');
 
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
-let sock; // جعلنا البوت متاح للكل
+let sock;
 const app = express();
-app.use(express.json()); // مهم جداً عشان يستقبل أوامر الشيت
+app.use(express.json());
 
 const port = process.env.PORT || 10000;
 
-// بوابة استقبال الأوامر من الشيت
+// بوابة استقبال الأوامر
 app.post('/send-message', async (req, res) => {
     const { to, message } = req.body;
+    
+    // تأكد إن البوت متصل قبل المحاولة
+    if (!sock) {
+        return res.status(500).send('البوت غير متصل، جرب تمسح الكود مرة ثانية');
+    }
+    
     try {
         await sock.sendMessage(to + '@c.us', { text: message });
         res.send('تم الإرسال بنجاح!');
@@ -21,7 +27,7 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(`السيرفر شغال ويستقبل أوامر على البورت ${port}`));
+app.listen(port, () => console.log(`السيرفر شغال على البورت ${port}`));
 
 async function connectToWhatsApp () {
     const { version } = await fetchLatestBaileysVersion();
@@ -37,8 +43,12 @@ async function connectToWhatsApp () {
 
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', (update) => {
-        if(update.connection === 'close') connectToWhatsApp();
-        else if(update.connection === 'open') console.log('✅ البوت جاهز ويستقبل أوامر!');
+        if(update.connection === 'close') {
+            sock = null; // إعادة تعيين البوت
+            connectToWhatsApp();
+        } else if(update.connection === 'open') {
+            console.log('✅ البوت متصل وجاهز للأوامر!');
+        }
     });
 
     sock.ev.on('messages.upsert', async m => {
@@ -47,9 +57,7 @@ async function connectToWhatsApp () {
         const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-        if(text) {
-            axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => console.log(e.message));
-        }
+        if(text) axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => console.log(e.message));
     });
 }
 connectToWhatsApp();
