@@ -1,26 +1,53 @@
 const { makeWASocket, useMultiFileAuthState, Browsers, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const express = require('express');
 
 // رابط قوقل شيت الخاص بك
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
+let currentQR = ''; // متغير لحفظ الباركود
+
 const app = express();
 const port = process.env.PORT || 10000;
-app.get('/', (req, res) => res.send('نظام الراهي يعمل بنجاح!'));
+
+// واجهة الويب لعرض الباركود
+app.get('/', (req, res) => {
+    if (currentQR) {
+        // تحويل النص إلى صورة باركود واضحة
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
+        res.send(`
+            <html dir="rtl">
+            <head><meta charset="utf-8"><title>ربط نظام الراهي</title></head>
+            <body style="text-align: center; margin-top: 50px; font-family: tahoma;">
+                <h2>امسح الكود بجوال المزرعة</h2>
+                <img src="${qrImageUrl}" alt="QR Code" style="border: 2px solid #000; padding: 10px; border-radius: 10px;" />
+                <p>بعد المسح بنجاح، ستختفي هذه الصفحة.</p>
+            </body>
+            </html>
+        `);
+    } else {
+        res.send(`
+            <html dir="rtl">
+            <head><meta charset="utf-8"></head>
+            <body style="text-align: center; margin-top: 50px; font-family: tahoma; color: green;">
+                <h2>✅ نظام الراهي يعمل ومربوط بالواتساب بنجاح!</h2>
+            </body>
+            </html>
+        `);
+    }
+});
+
 app.listen(port, () => console.log(`السيرفر شغال على البورت ${port}`));
 
 async function connectToWhatsApp () {
-    // جلب أحدث إصدار للواتساب لتجنب رفض الاتصال
     const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false, // عطلنا الطريقة القديمة
-        browser: Browsers.macOS('Desktop'), // تمويه الاتصال كأنه من جهاز ماك حقيقي لتجنب الحظر
+        printQRInTerminal: false, // عطلنا عرض الباركود في الشاشة السوداء
+        browser: Browsers.macOS('Desktop'),
         syncFullHistory: false
     });
 
@@ -30,11 +57,11 @@ async function connectToWhatsApp () {
         const { connection, lastDisconnect, qr } = update;
         
         if(qr) {
-            console.log('\n\n==================================');
-            console.log('امسح كود الـ QR هذا بجوال المزرعة:');
-            // السطر اللي كان ناقص لرسم الكود
-            qrcode.generate(qr, {small: true});
-            console.log('==================================\n\n');
+            currentQR = qr; // حفظ الباركود لعرضه في الصفحة
+            console.log('\n==================================');
+            console.log('تم إنشاء الكود! افتح الرابط التالي لمسحه بوضوح:');
+            console.log('https://alrahi-bot.onrender.com');
+            console.log('==================================\n');
         }
         
         if(connection === 'close') {
@@ -44,6 +71,7 @@ async function connectToWhatsApp () {
                 connectToWhatsApp();
             }
         } else if(connection === 'open') {
+            currentQR = ''; // إخفاء الكود من الصفحة بعد الربط بنجاح
             console.log('كفو! تم ربط الواتساب بنجاح!');
         }
     });
