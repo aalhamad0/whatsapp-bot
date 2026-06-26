@@ -5,15 +5,13 @@ const express = require('express');
 // رابط قوقل شيت الخاص بك
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
-let currentQR = ''; // متغير لحفظ الباركود
+let currentQR = ''; 
 
 const app = express();
 const port = process.env.PORT || 10000;
 
-// واجهة الويب لعرض الباركود
 app.get('/', (req, res) => {
     if (currentQR) {
-        // تحويل النص إلى صورة باركود واضحة
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
         res.send(`
             <html dir="rtl">
@@ -21,7 +19,6 @@ app.get('/', (req, res) => {
             <body style="text-align: center; margin-top: 50px; font-family: tahoma;">
                 <h2>امسح الكود بجوال المزرعة</h2>
                 <img src="${qrImageUrl}" alt="QR Code" style="border: 2px solid #000; padding: 10px; border-radius: 10px;" />
-                <p>بعد المسح بنجاح، ستختفي هذه الصفحة.</p>
             </body>
             </html>
         `);
@@ -46,9 +43,9 @@ async function connectToWhatsApp () {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false, // عطلنا عرض الباركود في الشاشة السوداء
+        printQRInTerminal: false,
         browser: Browsers.macOS('Desktop'),
-        syncFullHistory: false
+        syncFullHistory: false // إيقاف سحب المحادثات القديمة عشان ما يعلق
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -57,43 +54,54 @@ async function connectToWhatsApp () {
         const { connection, lastDisconnect, qr } = update;
         
         if(qr) {
-            currentQR = qr; // حفظ الباركود لعرضه في الصفحة
-            console.log('\n==================================');
-            console.log('تم إنشاء الكود! افتح الرابط التالي لمسحه بوضوح:');
-            console.log('https://alrahi-bot.onrender.com');
-            console.log('==================================\n');
+            currentQR = qr; 
+            console.log('تم إنشاء كود جديد، افتح الرابط لمسحه.');
         }
         
         if(connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
             console.log('انقطع الاتصال، جاري إعادة المحاولة...');
-            if(shouldReconnect) {
-                connectToWhatsApp();
-            }
+            if(shouldReconnect) connectToWhatsApp();
         } else if(connection === 'open') {
-            currentQR = ''; // إخفاء الكود من الصفحة بعد الربط بنجاح
-            console.log('كفو! تم ربط الواتساب بنجاح!');
+            currentQR = ''; 
+            console.log('كفو! تم ربط الواتساب بنجاح! وجاهز لاستقبال الرسايل.');
         }
     });
 
+    // رادار الرسايل الجديد
     sock.ev.on('messages.upsert', async m => {
+        if (m.type !== 'notify') return; // التركيز فقط على الرسايل الجديدة لحظة بلحظة
+        
         const msg = m.messages[0];
-        if(!msg.message || msg.key.fromMe) return;
+        if(!msg.message) return;
+        
+        if(msg.key.fromMe) {
+            console.log('تم تجاهل رسالة لأنها مرسلة من البوت نفسه.');
+            return;
+        }
 
         const senderNumber = msg.key.remoteJid.replace('@s.whatsapp.net', '');
         const messageText = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
+        console.log('--- 📡 رادار الراهي التقط رسالة جديدة ---');
+        console.log('المرسل:', senderNumber);
+        console.log('النص:', messageText);
+
         if(messageText) {
             try {
-                await axios.post(WEBHOOK_URL, {
+                const response = await axios.post(WEBHOOK_URL, {
                     sender: senderNumber,
                     message: messageText
                 });
-                console.log('تم تسجيل الرسالة في الشيت:', messageText);
+                console.log('✅ تم إرسال الرسالة إلى قوقل شيت بنجاح!');
+                console.log('رد قوقل شيت:', response.data);
             } catch (error) {
-                console.error('حدث خطأ أثناء الإرسال:', error);
+                console.error('❌ حدث خطأ أثناء الإرسال لقوقل:', error.message);
             }
+        } else {
+            console.log('⚠️ الرسالة لا تحتوي على نص قابل للقراءة (قد تكون صورة أو ملصق).');
         }
+        console.log('--------------------------------------');
     });
 }
 
