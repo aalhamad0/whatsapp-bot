@@ -5,7 +5,7 @@ const express = require('express');
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
 let sock;
-let isConnected = false; // مراقب حالة الاتصال
+let isConnected = false; 
 let currentQR = '';
 
 const app = express();
@@ -13,7 +13,6 @@ app.use(express.json());
 
 const port = process.env.PORT || 10000;
 
-// لوحة تحكم مرئية لمعرفة حالة البوت من المتصفح
 app.get('/', (req, res) => {
     if (currentQR) {
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
@@ -25,7 +24,7 @@ app.get('/', (req, res) => {
     }
 });
 
-// بوابة إرسال الرسايل من قوقل شيت
+// بوابة إرسال الرسايل من قوقل شيت (محدثة لدعم القروبات)
 app.post('/send-message', async (req, res) => {
     let { to, chatId, message } = req.body;
     let targetNumber = to || chatId;
@@ -34,16 +33,20 @@ app.post('/send-message', async (req, res) => {
         return res.status(400).send('فشل: الرقم أو الرسالة مفقودة');
     }
 
-    // الحماية: نرفض الإرسال إذا البوت مو جاهز
     if (!isConnected || !sock?.user) {
         return res.status(500).send('فشل: البوت نائم أو غير متصل بالواتساب حالياً، افتح رابط السيرفر للتأكد.');
     }
     
-    // تحويل الرقم لنص وتنظيفه لضمان عدم حدوث أخطاء
-    targetNumber = targetNumber.toString().replace('@c.us', '').replace('@s.whatsapp.net', '');
+    targetNumber = targetNumber.toString();
+    let jid = targetNumber;
+    
+    // التحقق: هل هو قروب أو رقم فردي؟
+    if (!targetNumber.endsWith('@g.us')) {
+        targetNumber = targetNumber.replace('@c.us', '').replace('@s.whatsapp.net', '');
+        jid = targetNumber + '@s.whatsapp.net';
+    }
     
     try {
-        const jid = targetNumber + '@s.whatsapp.net';
         await sock.sendMessage(jid, { text: message });
         res.send('تم الإرسال بنجاح!');
     } catch (error) {
@@ -83,10 +86,18 @@ async function connectToWhatsApp () {
     sock.ev.on('messages.upsert', async m => {
         if (m.type !== 'notify' || m.messages[0].key.fromMe) return;
         const msg = m.messages[0];
-        const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+        const sender = msg.key.remoteJid; 
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-        if (text) axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => {});
+        console.log('--- 📡 رادار الراهي التقط رسالة جديدة ---');
+        console.log('المرسل / القروب:', sender);
+        console.log('النص:', text);
+        console.log('--------------------------------------');
+
+        if (text) {
+            let cleanSender = sender.replace('@s.whatsapp.net', '');
+            axios.post(WEBHOOK_URL, { sender: cleanSender, message: text }).catch(e => {});
+        }
     });
 }
 connectToWhatsApp();
