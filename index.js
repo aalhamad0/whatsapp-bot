@@ -10,24 +10,35 @@ app.use(express.json());
 
 const port = process.env.PORT || 10000;
 
-// بوابة استقبال الأوامر
+// بوابة استقبال الأوامر من قوقل شيت
 app.post('/send-message', async (req, res) => {
-    const { to, message } = req.body;
+    let { to, chatId, message } = req.body;
     
-    // تأكد إن البوت متصل قبل المحاولة
+    // السيرفر الحين صار ذكي يقرأ الكود القديم والجديد للشيت
+    let targetNumber = to || chatId;
+    
+    if (!targetNumber || !message) {
+        return res.status(400).send('فشل: الرقم أو الرسالة مفقودة');
+    }
+
+    // تنظيف الرقم من أي إضافات قديمة عشان ما يكراش النظام
+    targetNumber = targetNumber.replace('@c.us', '').replace('@s.whatsapp.net', '');
+
     if (!sock) {
-        return res.status(500).send('البوت غير متصل، جرب تمسح الكود مرة ثانية');
+        return res.status(500).send('فشل: البوت غير متصل');
     }
     
     try {
-        await sock.sendMessage(to + '@c.us', { text: message });
+        // إضافة الامتداد الرسمي الصحيح للواتساب
+        const jid = targetNumber + '@s.whatsapp.net';
+        await sock.sendMessage(jid, { text: message });
         res.send('تم الإرسال بنجاح!');
     } catch (error) {
         res.status(500).send('فشل الإرسال: ' + error.message);
     }
 });
 
-app.listen(port, () => console.log(`السيرفر شغال على البورت ${port}`));
+app.listen(port, () => console.log(`السيرفر شغال ويستقبل أوامر على البورت ${port}`));
 
 async function connectToWhatsApp () {
     const { version } = await fetchLatestBaileysVersion();
@@ -44,7 +55,7 @@ async function connectToWhatsApp () {
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', (update) => {
         if(update.connection === 'close') {
-            sock = null; // إعادة تعيين البوت
+            sock = null; 
             connectToWhatsApp();
         } else if(update.connection === 'open') {
             console.log('✅ البوت متصل وجاهز للأوامر!');
@@ -57,7 +68,9 @@ async function connectToWhatsApp () {
         const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-        if(text) axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => console.log(e.message));
+        if(text) {
+            axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => console.log('خطأ في إرسال الويب هوك:', e.message));
+        }
     });
 }
 connectToWhatsApp();
