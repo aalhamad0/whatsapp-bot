@@ -5,31 +5,44 @@ const express = require('express');
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
 let sock;
+let isConnected = false; // مراقب حالة الاتصال
+let currentQR = '';
+
 const app = express();
 app.use(express.json());
 
 const port = process.env.PORT || 10000;
 
-// بوابة استقبال الأوامر من قوقل شيت
+// لوحة تحكم مرئية لمعرفة حالة البوت من المتصفح
+app.get('/', (req, res) => {
+    if (currentQR) {
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
+        res.send(`<html dir="rtl"><body style="text-align:center;font-family:tahoma;margin-top:50px;"><h2>📱 امسح الباركود بجوال المزرعة</h2><img src="${qrImageUrl}" style="border:2px solid black;padding:10px;border-radius:10px;"/></body></html>`);
+    } else if (isConnected) {
+        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:green;margin-top:50px;"><h2>✅ البوت متصل وجاهز لاستقبال وإرسال الأوامر!</h2></body></html>');
+    } else {
+        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:orange;margin-top:50px;"><h2>⏳ جاري تشغيل البوت... حدث الصفحة بعد ثواني</h2></body></html>');
+    }
+});
+
+// بوابة إرسال الرسايل من قوقل شيت
 app.post('/send-message', async (req, res) => {
     let { to, chatId, message } = req.body;
-    
-    // السيرفر الحين صار ذكي يقرأ الكود القديم والجديد للشيت
     let targetNumber = to || chatId;
     
     if (!targetNumber || !message) {
         return res.status(400).send('فشل: الرقم أو الرسالة مفقودة');
     }
 
-    // تنظيف الرقم من أي إضافات قديمة عشان ما يكراش النظام
-    targetNumber = targetNumber.replace('@c.us', '').replace('@s.whatsapp.net', '');
-
-    if (!sock) {
-        return res.status(500).send('فشل: البوت غير متصل');
+    // الحماية: نرفض الإرسال إذا البوت مو جاهز
+    if (!isConnected || !sock?.user) {
+        return res.status(500).send('فشل: البوت نائم أو غير متصل بالواتساب حالياً، افتح رابط السيرفر للتأكد.');
     }
     
+    // تحويل الرقم لنص وتنظيفه لضمان عدم حدوث أخطاء
+    targetNumber = targetNumber.toString().replace('@c.us', '').replace('@s.whatsapp.net', '');
+    
     try {
-        // إضافة الامتداد الرسمي الصحيح للواتساب
         const jid = targetNumber + '@s.whatsapp.net';
         await sock.sendMessage(jid, { text: message });
         res.send('تم الإرسال بنجاح!');
@@ -38,7 +51,7 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(`السيرفر شغال ويستقبل أوامر على البورت ${port}`));
+app.listen(port, () => console.log(`السيرفر شغال على البورت ${port}`));
 
 async function connectToWhatsApp () {
     const { version } = await fetchLatestBaileysVersion();
@@ -54,11 +67,16 @@ async function connectToWhatsApp () {
 
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', (update) => {
-        if(update.connection === 'close') {
-            sock = null; 
-            connectToWhatsApp();
-        } else if(update.connection === 'open') {
-            console.log('✅ البوت متصل وجاهز للأوامر!');
+        const { connection, qr } = update;
+        if (qr) currentQR = qr;
+        
+        if (connection === 'close') {
+            isConnected = false;
+            currentQR = '';
+            setTimeout(connectToWhatsApp, 3000);
+        } else if (connection === 'open') {
+            isConnected = true;
+            currentQR = '';
         }
     });
 
@@ -68,9 +86,7 @@ async function connectToWhatsApp () {
         const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-        if(text) {
-            axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => console.log('خطأ في إرسال الويب هوك:', e.message));
-        }
+        if (text) axios.post(WEBHOOK_URL, { sender, message: text }).catch(e => {});
     });
 }
 connectToWhatsApp();
