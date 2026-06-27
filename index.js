@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
     }
 });
 
-// بوابة إرسال الرسايل من قوقل شيت (محدثة لدعم القروبات)
+// بوابة إرسال الرسايل من قوقل شيت 
 app.post('/send-message', async (req, res) => {
     let { to, chatId, message } = req.body;
     let targetNumber = to || chatId;
@@ -40,7 +40,6 @@ app.post('/send-message', async (req, res) => {
     targetNumber = targetNumber.toString();
     let jid = targetNumber;
     
-    // التحقق: هل هو قروب أو رقم فردي؟
     if (!targetNumber.endsWith('@g.us')) {
         targetNumber = targetNumber.replace('@c.us', '').replace('@s.whatsapp.net', '');
         jid = targetNumber + '@s.whatsapp.net';
@@ -86,18 +85,23 @@ async function connectToWhatsApp () {
     sock.ev.on('messages.upsert', async m => {
         if (m.type !== 'notify' || m.messages[0].key.fromMe) return;
         const msg = m.messages[0];
+        
+        // 🛡️ درع الحماية: التأكد إن الرسالة موجودة وتحتوي على نص (تجاهل الصور والملصقات)
+        if (!msg.message) return;
+
         const sender = msg.key.remoteJid; 
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+
+        // 🛡️ إذا ما فيه نص، تجاهل الرسالة ولا تسوي شيء
+        if (!text) return;
 
         console.log('--- 📡 رادار الراهي التقط رسالة جديدة ---');
         console.log('المرسل / القروب:', sender);
         console.log('النص:', text);
         console.log('--------------------------------------');
 
-        if (text) {
-            let cleanSender = sender.replace('@s.whatsapp.net', '');
-            axios.post(WEBHOOK_URL, { sender: cleanSender, message: text }).catch(e => {});
-        }
+        let cleanSender = sender.replace('@s.whatsapp.net', '');
+        axios.post(WEBHOOK_URL, { sender: cleanSender, message: text }).catch(e => {});
     });
 }
 connectToWhatsApp();
