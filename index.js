@@ -6,8 +6,8 @@ const { MongoClient } = require('mongodb');
 
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
-// ⚠️ استبدل <db_password> بالرقم السري الخاص بقاعدة البيانات
-const MONGO_URI = 'mongodb+srv://aalhamad0_db_user:<Or3Jklq5JGfSUtNm>@cluster0.wkucpbx.mongodb.net/?appName=Cluster0';
+// 🔐 تم دمج رابط الخزنة الخاص بك بنجاح
+const MONGO_URI = 'mongodb+srv://aalhamad0_db_user:Or3Jklq5JGfSUtNm@cluster0.wkucpbx.mongodb.net/?appName=Cluster0';
 
 let sock;
 let isConnected = false; 
@@ -22,9 +22,9 @@ app.get('/', (req, res) => {
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}`;
         res.send(`<html dir="rtl"><body style="text-align:center;font-family:tahoma;margin-top:50px;"><h2>📱 امسح الباركود للمرة الأخيرة بجوال المزرعة</h2><img src="${qrImageUrl}" style="border:2px solid black;padding:10px;border-radius:10px;"/></body></html>`);
     } else if (isConnected) {
-        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:green;margin-top:50px;"><h2>✅ البوت متصل ومحفوظ في الخزنة السحابية!</h2></body></html>');
+        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:green;margin-top:50px;"><h2>✅ البوت متصل ومحفوظ في الخزنة السحابية للأبد!</h2></body></html>');
     } else {
-        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:orange;margin-top:50px;"><h2>⏳ جاري تشغيل البوت وفتح الخزنة... حدث الصفحة</h2></body></html>');
+        res.send('<html dir="rtl"><body style="text-align:center;font-family:tahoma;color:orange;margin-top:50px;"><h2>⏳ جاري تشغيل البوت وفتح الخزنة... حدث الصفحة بعد ثواني</h2></body></html>');
     }
 });
 
@@ -128,7 +128,7 @@ async function connectToWhatsApp () {
         } else if (connection === 'open') {
             isConnected = true;
             currentQR = '';
-            console.log('✅ البوت متصل بالواتساب ومحمي!');
+            console.log('✅ البوت متصل بالواتساب ومحفوظ في الخزنة!');
         }
     });
 
