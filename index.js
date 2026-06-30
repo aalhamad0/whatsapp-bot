@@ -7,7 +7,7 @@ const { MongoClient } = require('mongodb');
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzrX3AdAromnJRhtjsUJEguUouRzfpXzzOujHDSjfMg-ezDTSvR2-xYjRQNj-7DjqHr/exec';
 
 // ⚠️ استبدل <db_password> بالرقم السري الخاص بقاعدة البيانات
-const MONGO_URI = 'mongodb+srv://aalhamad0_db_user:<db_password>@cluster0.wkucpbx.mongodb.net/?appName=Cluster0';
+const MONGO_URI = 'mongodb+srv://aalhamad0_db_user:<Or3Jklq5JGfSUtNm>@cluster0.wkucpbx.mongodb.net/?appName=Cluster0';
 
 let sock;
 let isConnected = false; 
